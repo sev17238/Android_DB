@@ -8,6 +8,8 @@ import android.support.v7.widget.Toolbar;
 import android.view.View;
 import android.widget.TextView;
 
+import com.example.sdiego.android_db.Entitys.Country;
+
 public class Info_Activity extends AppCompatActivity {
 
     TextView campoPais, campoCont, campoPrueba;
@@ -23,11 +25,11 @@ public class Info_Activity extends AppCompatActivity {
         //campoPrueba = (TextView) findViewById(R.id.textview1);
 
         Bundle sentobj = getIntent().getExtras();
-        Pais pais = sentobj.getParcelable("Pais");
+        Country country = sentobj.getParcelable("Country");
 
-        if(pais!=null){
-            campoPais.setText(pais.getNombrepais());
-            campoCont.setText(pais.getContinente());
+        if(country!=null){
+            campoPais.setText(country.getName());
+            campoCont.setText(country.getContinent());
             //campoPrueba.setText(pais.getVolcanes()[0].getNombre());
         }
 

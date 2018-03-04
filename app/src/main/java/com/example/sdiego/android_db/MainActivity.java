@@ -1,28 +1,57 @@
 package com.example.sdiego.android_db;
 
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.text.TextUtils;
+import android.view.ContextMenu;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.Toast;
+
+import com.example.sdiego.android_db.Entitys.Country;
+import com.example.sdiego.android_db.Entitys.CountryDB;
+import com.example.sdiego.android_db.Entitys.CountryDataSource;
+import com.example.sdiego.android_db.Entitys.CountryRep;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+
+import io.reactivex.ObservableEmitter;
+import io.reactivex.ObservableOnSubscribe;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.CompositeDisposable;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Action;
+import io.reactivex.functions.Consumer;
+import io.reactivex.schedulers.Schedulers;
 
 public class MainActivity extends AppCompatActivity {
-    private ListView list;
-    private ItemListAdapter adapter;
-    private ArrayList<Pais> paises;
+    private ListView listview;
+    private FloatingActionButton fab;
+
+    //Adapter
+    List<Country> countryList;
+    ArrayAdapter adapter;
+
+    //DataBase
+    private CompositeDisposable compositeDisposable;
+    private CountryRep countryRep;
 
     public MainActivity(){
-        paises = new ArrayList<Pais>();
+        countryList = new ArrayList<>();
+        compositeDisposable = new CompositeDisposable();
     }
 
     @Override
@@ -32,64 +61,94 @@ public class MainActivity extends AppCompatActivity {
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        list=(ListView) findViewById(R.id.listViewPaises);
+        //Init view
+        listview=(ListView) findViewById(R.id.listViewPaises);
+        fab = (FloatingActionButton) findViewById(R.id.fab);
 
-        //Adapter Usage
-        //ArrayAdapter<String> adapter= new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,countries);
-        //list.setAdapter(adapter);
+        adapter = new ArrayAdapter(this,android.R.layout.simple_list_item_1,countryList);
+        registerForContextMenu(listview);
+        listview.setAdapter(adapter);
 
-        ArrayList<Volcan> listG = new ArrayList<Volcan>();
-        Volcan it1 = new Volcan( "Volcan de Pacaya","2552 MSNM");
-        Volcan it2 = new Volcan("Volcan de Agua","3760 MSNM");
-        Volcan it3 = new Volcan("Volcan Santa Maria", "3772 MSNM");
-        Volcan it4 = new Volcan("Volcan de Acatenango", "4010 MSNM");
-        listG.add(it1);
-        listG.add(it2);
-        listG.add(it3);
-        listG.add(it4);
+        //DataBase
+        CountryDB countryDB = CountryDB.getInstance(this);
+        countryRep = CountryRep.getInstance(CountryDataSource.getInstance(countryDB.countryDAO()));
 
-        /*Volcan[] volcanesG = new Volcan[5];
-        volcanesG[1] = new Volcan( "Volcan de Pacaya","2552 MSNM");
-        volcanesG[2] = new Volcan("Volcan de Agua","3760 MSNM");
-        volcanesG[3] = new Volcan("Volcan Santa Maria", "3772 MSNM");
-        volcanesG[4] = new Volcan("Volcan de Acatenango", "4010 MSNM");*/
+        //Load all data from DataBase
+        loadData();
 
-        Pais pais1 = new Pais("Guatemala","CentroAmerica", listG);
-        paises.add(new Pais("Italia","Europa",listG));
-        paises.add(new Pais("Chile","America del Sur",listG));
-        paises.add(pais1);
-
-        adapter = new ItemListAdapter(getApplicationContext(), paises);
-        list.setAdapter(adapter);
-
-        list.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+        listview.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                Pais pais = (Pais)adapter.getItem(position);
+                Country count = (Country)adapter.getItem(position);
 
                 Intent intent = new Intent(MainActivity.this, Info_Activity.class);
 
-                intent.putExtra("Pais",pais);
+                intent.putExtra("Country",count);
                 startActivity(intent);
-
             }
         });
 
-
-
-
-
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
+        //Event
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
+                //Add new country
+                Disposable disposable= io.reactivex.Observable.create(new ObservableOnSubscribe<Object>() {
+                    @Override
+                    public void subscribe(ObservableEmitter<Object> e) throws Exception {
+                        Country country = new Country("XCountry","YContinent");
+                        countryRep.insertCountry(country);
+                        e.onComplete();
+                    }
+                })
+                .observeOn(AndroidSchedulers.mainThread())
+                        .subscribeOn(Schedulers.io())
+                        .subscribe(new Consumer() {
+                                       @Override
+                                       public void accept(Object o) throws Exception {
+                                           Toast.makeText(MainActivity.this, "Country Added.", Toast.LENGTH_SHORT).show();
+                                       }
+                                   }, new Consumer<Throwable>() {
+                                       @Override
+                                       public void accept(Throwable throwable) throws Exception {
+                                           Toast.makeText(MainActivity.this, "" + throwable.getMessage(), Toast.LENGTH_SHORT).show();
+                                       }
+                                   },
+                                new Action() {
+                                    @Override
+                                    public void run() throws Exception {
+                                        loadData(); //Refresh Data
+                                    }
+                                }
+                        );
             }
         });
     }
 
+    private void loadData(){
+        //Use RXJava
+        Disposable disposable = countryRep.getAllCountries()
+                .observeOn(AndroidSchedulers.mainThread()).subscribeOn(Schedulers.io())
+                .subscribe(new Consumer<List<Country>>() {
+                    @Override
+                    public void accept(List<Country> countries) throws Exception {
+                        onGetAllCountrySuccess(countries);
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        Toast.makeText(MainActivity.this, ""+throwable.getMessage(),Toast.LENGTH_SHORT).show();
+                    }
+                });
+                compositeDisposable.add(disposable);
+    }
 
+    private void onGetAllCountrySuccess(List<Country> countries){
+        countryList.clear();
+        countryList.addAll(countries);
+        adapter.notifyDataSetChanged();
+
+    }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -103,7 +162,14 @@ public class MainActivity extends AppCompatActivity {
         // Handle action bar item clicks here. The action bar will
         // automatically handle clicks on the Home/Up button, so long
         // as you specify a parent activity in AndroidManifest.xml.
+
         int id = item.getItemId();
+
+        switch(id){
+            case R.id.menu_clear:
+            deleteAllCountries();
+            break;
+        }
 
         //noinspection SimplifiableIfStatement
         if (id == R.id.action_settings) {
@@ -112,4 +178,169 @@ public class MainActivity extends AppCompatActivity {
 
         return super.onOptionsItemSelected(item);
     }
+
+    //Se borran los paises de la lista con ayuda del metodo deleteAllCountries de countryRep.
+    private void deleteAllCountries(){
+        Disposable disposable= io.reactivex.Observable.create(new ObservableOnSubscribe<Object>() {
+            @Override
+            public void subscribe(ObservableEmitter<Object> e) throws Exception {
+                countryRep.deleteAllCountries();
+                e.onComplete();
+            }
+        })
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribeOn(Schedulers.io())
+                .subscribe(new Consumer() {
+                               @Override
+                               public void accept(Object o) throws Exception {
+                                   //Toast.makeText(MainActivity.this, "Country Added.", Toast.LENGTH_SHORT).show();
+                               }
+                           }, new Consumer<Throwable>() {
+                               @Override
+                               public void accept(Throwable throwable) throws Exception {
+                                   Toast.makeText(MainActivity.this, "" + throwable.getMessage(), Toast.LENGTH_SHORT).show();
+                               }
+                           },
+                        new Action() {
+                            @Override
+                            public void run() throws Exception {
+                                loadData(); //Refresh Data
+                            }
+                        }
+                );
+        compositeDisposable.add(disposable);
+    }
+    //Se crea el menu para actualizar el pais o para borrarlo
+    @Override
+    public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
+        super.onCreateContextMenu(menu, v, menuInfo);
+        AdapterView.AdapterContextMenuInfo info = (AdapterView.AdapterContextMenuInfo)menuInfo;
+        menu.setHeaderTitle("Select action:");
+        menu.add(Menu.NONE,0,Menu.NONE,"Update");
+        menu.add(Menu.NONE,1,Menu.NONE,"Delete");
+    }
+
+    @Override
+    public boolean onContextItemSelected(MenuItem item) {
+        AdapterView.AdapterContextMenuInfo info = (AdapterView.AdapterContextMenuInfo)item.getMenuInfo();
+        final Country country = countryList.get(info.position);
+
+        switch (item.getItemId()){
+
+            case 0://update
+                final EditText edtName = new EditText(MainActivity.this);
+                edtName.setText(country.getName());
+                edtName.setHint("Enter new name");
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("Edit")
+                        .setMessage("Edit country name")
+                        .setView(edtName)
+                        .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                if(TextUtils.isEmpty(edtName.getText().toString())){
+                                    return ;
+                                }else{
+                                    country.setName(edtName.getText().toString());
+                                    updateCountry(country);
+                                }
+                            }
+                        }).setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.dismiss();
+                    }
+                }).create().show();
+                break;
+
+            case 1: //Delete
+                new AlertDialog.Builder(MainActivity.this)
+                        .setMessage("Do you want to delete "+country.getName()+"from list?")
+                        .setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                               deleteCountry(country);
+                            }
+                        }).setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.dismiss();
+                    }
+                }).create().show();
+                break;
+        }
+        return true;
+    }
+
+    private void deleteCountry(final Country country) {
+        Disposable disposable= io.reactivex.Observable.create(new ObservableOnSubscribe<Object>() {
+            @Override
+            public void subscribe(ObservableEmitter<Object> e) throws Exception {
+                countryRep.deleteCountry(country);
+                e.onComplete();
+            }
+        })
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribeOn(Schedulers.io())
+                .subscribe(new Consumer() {
+                               @Override
+                               public void accept(Object o) throws Exception {
+                                   //Toast.makeText(MainActivity.this, "Country Added.", Toast.LENGTH_SHORT).show();
+                               }
+                           }, new Consumer<Throwable>() {
+                               @Override
+                               public void accept(Throwable throwable) throws Exception {
+                                   Toast.makeText(MainActivity.this, "" + throwable.getMessage(), Toast.LENGTH_SHORT).show();
+                               }
+                           },
+                        new Action() {
+                            @Override
+                            public void run() throws Exception {
+                                loadData(); //Refresh Data
+                            }
+                        }
+
+                );
+        compositeDisposable.add(disposable);
+    }
+
+    private void updateCountry(final Country country) {
+        Disposable disposable= io.reactivex.Observable.create(new ObservableOnSubscribe<Object>() {
+            @Override
+            public void subscribe(ObservableEmitter<Object> e) throws Exception {
+                countryRep.updateCountry(country);
+                e.onComplete();
+            }
+        })
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribeOn(Schedulers.io())
+                .subscribe(new Consumer() {
+                               @Override
+                               public void accept(Object o) throws Exception {
+                                   //Toast.makeText(MainActivity.this, "Country Added.", Toast.LENGTH_SHORT).show();
+                               }
+                           }, new Consumer<Throwable>() {
+                               @Override
+                               public void accept(Throwable throwable) throws Exception {
+                                   Toast.makeText(MainActivity.this, "" + throwable.getMessage(), Toast.LENGTH_SHORT).show();
+                               }
+                           },
+                        new Action() {
+                            @Override
+                            public void run() throws Exception {
+                                loadData(); //Refresh Data
+                            }
+                        }
+
+                );
+        compositeDisposable.add(disposable);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        compositeDisposable.clear();
+    }
+
+
 }
